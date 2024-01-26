@@ -28,13 +28,14 @@ class ReplayMemory(object):
         return len(self.memory)
 
 #DRL_Agent
-def create_model():
+def create_model(k=3):
     model = nn.Sequential(
       nn.Conv2d(2,4,(3,3), stride=1),
       nn.Conv2d(4,8,(3,3), stride=1),
       nn.Conv2d(8,16,(3,3), stride=1),
       nn.Flatten(),
-      nn.Linear(64, 3)
+      nn.Linear(192, 64),
+      nn.Linear(64,3)
     )
     return model
 
@@ -102,11 +103,11 @@ def plot_reward(rewards, resp_marks=[], resp_values=[], result=False):
     plt.gcf().canvas.flush_events()
     plt.pause(0.01)
     
-def explore_rate(x, e0, e1, e_decay):
+def explore_rate_linear(x, e0, e1, e_decay):
     return e1 + (e0-e1) * (1 - x / e_decay)
     
-def response_episode(r, e0, e1, e_decay):
-    return np.round(e_decay * np.log((e0-e1) / (1 - r - e1))) 
+def explore_rate_exp(x, e0, e1, e_decay):
+    return e1 + (e0-e1) * np.exp(- x / e_decay)
     
 def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params):
     plt.ion()
@@ -127,7 +128,7 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params)
         state, _ = env.reset()
         ep_reward = 0
         state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-        eps_threshold = explore_rate(i_episode, params['EPS_START'], params['EPS_END'], params['EPS_DECAY'])
+        eps_threshold = explore_rate_linear(i_episode, params['EPS_START'], params['EPS_END'], params['EPS_DECAY'])
         if (1 - eps_threshold > responsibility[stage]):
             stage += 1
             eps_marks.append(i_episode)
@@ -172,7 +173,10 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params)
     plot_reward(rewards, result=True)
     plt.ioff()
     plt.show()
-    torch.save(target_Q.state_dict(), params['VERSION']+'.pt')
+    res = params.copy()
+    res['MODEL'] = target_Q.state_dict()
+    torch.save(res, res['VERSION']+'.pt')
+    
     
     
 def test(env, target_Q, device):
