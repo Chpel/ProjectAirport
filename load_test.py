@@ -3,7 +3,7 @@ from DRL_Agent import *
 
 
 params = {
-    'VERSION': 'Navigator_v2',
+    'VERSION': 'Free_Pilot_v1',
     }
 
 
@@ -13,7 +13,7 @@ fig, ax = plt.subplots(1,1, figsize=(7,6));
 Main_surface = np.array(
    [[0,0,0,0,0,0,0,0,0,0],
     [1,1,1,1,1,0,1,1,0,0],
-    [0,0,0,0,1,1,1,1,0,0],
+    [0,0,0,0,1,1,1,1,1,1],
     [1,1,1,1,1,0,1,1,0,0],
     [0,0,0,0,1,1,1,1,0,0],
     [1,1,1,1,1,1,0,1,1,1],
@@ -24,8 +24,8 @@ Main_surface = np.array(
 ax.imshow(Main_surface)
 plt.show()
 
-env = Airplane_v1(Main_surface)
-target_Q=create_model()
+env = Airplane_v2(Main_surface)
+target_Q=create_model(env.mobility)
 target_Q.load_state_dict(torch.load(params['VERSION']+'.pt')['MODEL'])
 device='cpu'
 test(env, target_Q, device)

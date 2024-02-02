@@ -35,7 +35,8 @@ def create_model(k=3):
       nn.Conv2d(8,16,(3,3), stride=1),
       nn.Flatten(),
       nn.Linear(192, 64),
-      nn.Linear(64,3)
+      nn.ReLU(),
+      nn.Linear(64,k)
     )
     return model
 
@@ -104,7 +105,7 @@ def plot_reward(rewards, resp_marks=[], resp_values=[], result=False):
     plt.pause(0.01)
     
 def explore_rate_linear(x, e0, e1, e_decay):
-    return e1 + (e0-e1) * (1 - x / e_decay)
+    return e1 + (e0-e1) * np.maximum(1 - x / e_decay, 0)
     
 def explore_rate_exp(x, e0, e1, e_decay):
     return e1 + (e0-e1) * np.exp(- x / e_decay)
@@ -128,7 +129,7 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params)
         state, _ = env.reset()
         ep_reward = 0
         state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-        eps_threshold = explore_rate_linear(i_episode, params['EPS_START'], params['EPS_END'], params['EPS_DECAY'])
+        eps_threshold = explore_rate_exp(steps_done, params['EPS_START'], params['EPS_END'], params['EPS_DECAY'])
         if (1 - eps_threshold > responsibility[stage]):
             stage += 1
             eps_marks.append(i_episode)
@@ -137,7 +138,7 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params)
             action = select_action(state, env, policy_Q, eps_threshold, device)
             steps_done += 1
             observation, reward, terminated, _ = env.step(action.item())
-            ep_reward += reward
+            ep_reward += reward * params['GAMMA'] ** t
             reward = torch.tensor([reward], device=device)
             done = terminated
             
