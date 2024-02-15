@@ -1,5 +1,5 @@
-from Airport_env import *
-from DRL_Agent import *
+from modules.Airport_env import *
+from modules.DRL_Agent import *
 
 params = {
     'VERSION': 'Navigator_v2_4000',

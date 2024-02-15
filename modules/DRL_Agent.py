@@ -29,14 +29,17 @@ class ReplayMemory(object):
 
 #DRL_Agent
 def create_model(k=3):
-    model = nn.Sequential(
-      nn.Conv2d(2,4,(3,3), stride=1),
-      nn.Conv2d(4,8,(3,3), stride=1),
-      nn.Conv2d(8,16,(3,3), stride=1),
-      nn.Flatten(),
-      nn.Linear(192, 64),
+    model = nn.Sequential( # 2x9x10
+      nn.Conv2d(2,4,(3,3), stride=1), #4x7x8
       nn.ReLU(),
-      nn.Linear(64,k)
+      nn.Conv2d(4,8,(3,3), stride=1), #8x5x6
+      nn.ReLU(),
+      nn.Conv2d(8,16,(3,3), stride=1), #16x3x5
+      nn.ReLU(),
+      nn.Conv2d(16,32,(3,3), stride=1), #32x1x2
+      nn.ReLU(),
+      nn.Flatten(), #32x1x2=64
+      nn.Linear(64,k) #5
     )
     return model
 
@@ -46,7 +49,7 @@ def select_action(state, env, Q, eps_threshold, device):
         with torch.no_grad():
             return Q(state).argmax(keepdim=True)
     else:
-        return torch.tensor([[np.random.randint(env.mobility)]], device=device, dtype=torch.long)
+        return torch.tensor([[np.random.randint(env.fleet[0].mobility)]], device=device, dtype=torch.long)
 
 def optimize_model(policy_Q, target_Q, optimizer, memory, BATCH_SIZE, GAMMA, device):
     if len(memory) < BATCH_SIZE:
@@ -126,10 +129,10 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params)
     eps_marks = []
     for i_episode in tqdm(range(num_episodes)):
         # Initialize the environment and get its state
-        state, _ = env.reset()
+        state, _ = env.reset(True)
         ep_reward = 0
         state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-        eps_threshold = explore_rate_exp(steps_done, params['EPS_START'], params['EPS_END'], params['EPS_DECAY'])
+        eps_threshold = explore_rate_linear(steps_done, params['EPS_START'], params['EPS_END'], params['EPS_DECAY'])
         if (1 - eps_threshold > responsibility[stage]):
             stage += 1
             eps_marks.append(i_episode)
@@ -184,14 +187,17 @@ def test(env, target_Q, device):
     plt.imshow(env.surface)
     for g in range(len(env.y_in)):
         track = []
-        prec0 = 0
-        state, pos = env.reset(g)
-        track.append(pos)
+        gate = env.y_in[g]
+        env.fleet[0].set_route(np.array([gate, 0]), env.closest_exit(gate))
+        state, pos = env.reset()
+        track.append(pos[0])
         state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
         for t in count():
             action = target_Q(state).argmax(keepdim=True)
+            #print(track[-1], env.fleet[0].v, end=' ')
             observation, reward, terminated, new_pos = env.step(action.item())
-            track.append(new_pos)
+            track.append(new_pos[0])
+            #print(action.item(), ' -> ', track[-1], env.fleet[0].v)
             done = terminated
             if done:
                 break

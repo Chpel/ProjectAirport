@@ -1,9 +1,10 @@
-from Airport_env import *
-from DRL_Agent import *
+from modules.Airport_env import *
+from modules.DRL_Agent import *
 
 
 params = {
-    'VERSION': 'Free_Pilot_v1',
+    #'VERSION': 'Free_Pilot_v1',
+    'VERSION': 'Pilot_v1.5',
     }
 
 
@@ -24,8 +25,9 @@ Main_surface = np.array(
 ax.imshow(Main_surface)
 plt.show()
 
-env = Airplane_v2(Main_surface)
-target_Q=create_model(env.mobility)
+env = Airport(Main_surface)
+env.add(1)
+target_Q=create_model(env.fleet[0].mobility)
 target_Q.load_state_dict(torch.load(params['VERSION']+'.pt')['MODEL'])
 device='cpu'
 test(env, target_Q, device)
