@@ -3,12 +3,12 @@ from modules.DRL_Agent import *
 
 
 params = {
-    'VERSION': 'Pilot_v1.5',
-    'BATCH_SIZE': 500,
+    'VERSION': 'Pilot_v1.5_test',
+    'BATCH_SIZE': 5,
     'GAMMA': 0.99,
     'EPS_START': 0.9,
     'EPS_END': 0.05,
-    'EPS_DECAY': 10000,
+    'EPS_DECAY': 6,
     'N_EPS': 10000,
     'REPORT': 500,
     'LR': 1e-4,
