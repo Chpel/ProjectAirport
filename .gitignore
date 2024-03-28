@@ -4,3 +4,4 @@ pics/
 *.png
 *.ipynb
 Anaconda Prompt (RL).lnk
+*.npy

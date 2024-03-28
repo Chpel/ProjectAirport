@@ -1,14 +1,7 @@
-import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-import torch
-import random
-from torch import nn,tensor
+#MDP model (s, a, r, new_s)
 from collections import namedtuple, deque
 from itertools import count
-from tqdm import tqdm
-from pathlib import Path
-
+import random
 
 Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
 #MDP model (s, a, r, new_s)
@@ -28,28 +21,48 @@ class ReplayMemory(object):
         return len(self.memory)
 
 #DRL_Agent
-def create_model(k=3):
-    model = nn.Sequential( # 2x9x10
-      nn.Conv2d(2,4,(3,3), stride=1), #4x7x8
-      nn.ReLU(),
-      nn.Conv2d(4,8,(3,3), stride=1), #8x5x6
-      nn.ReLU(),
-      nn.Conv2d(8,16,(3,3), stride=1), #16x3x5
-      nn.ReLU(),
-      nn.Conv2d(16,32,(3,3), stride=1), #32x1x2
-      nn.ReLU(),
-      nn.Flatten(), #32x1x2=64
-      nn.Linear(64,k) #5
-    )
-    return model
+from torch import nn,stack
+from torch.optim import Adam
+
+class DispatcherRL(nn.Module):
+    def __init__(self, k_actions, k_agents=1, k_outputs=1):
+        super(DispatcherRL, self).__init__()
+        self.k_nns = k_agents
+        self.k_actors = k_outputs
+        if k_agents == 1: #Dispatcher
+            self.model = nn.Sequential( # 1x(1+fleet)x9x10
+            nn.Conv2d(1+k_outputs,8,(3,3), stride=1), #1x8x7x8
+            nn.ReLU(),
+            nn.Conv2d(8,16,(3,3), stride=1), #1x16x5x6
+            nn.ReLU(),
+            nn.Conv2d(16,32,(3,3), stride=1), #1x32x3x5
+            nn.ReLU(),
+            nn.Conv2d(32,64,(3,3), stride=1), #1x64x1x2
+            nn.ReLU(),
+            nn.Flatten(1)) #1x128
+
+            self.fcs = nn.ModuleList([nn.Linear(128, k_actions) for i in range(k_outputs)])
+        else:
+            pass #Decentralized
+
+    def forward(self, x): #Centralised only (yet)
+        x = self.model(x)
+        res = [l(x) for l in self.fcs]
+        return stack(res, dim=1)
+        
+#eps-greedy Explorer
+from torch import no_grad,long,randint
 
 def select_action(state, env, Q, eps_threshold, device):
     sample = np.random.random()
     if sample > eps_threshold:
-        with torch.no_grad():
-            return Q(state).argmax(keepdim=True)
+        with no_grad():
+            return Q(state).argmax(dim=-1)
     else:
-        return torch.tensor([[np.random.randint(env.fleet[0].mobility)]], device=device, dtype=torch.long)
+        return randint(0,6,(1,len(env.fleet),), device=device, dtype=long)
+   
+#DRL_optimizer   
+from torch import tensor,bool,cat,zeros
 
 def optimize_model(policy_Q, target_Q, optimizer, memory, BATCH_SIZE, GAMMA, device):
     if len(memory) < BATCH_SIZE:
@@ -57,38 +70,44 @@ def optimize_model(policy_Q, target_Q, optimizer, memory, BATCH_SIZE, GAMMA, dev
     transitions = memory.sample(BATCH_SIZE)
     # Transpose the batch
     batch = Transition(*zip(*transitions))
-    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, \
-                      batch.next_state)), device=device, dtype=torch.bool)
-    non_final_next_states = torch.cat([s for s in batch.next_state
+    non_final_mask = tensor(tuple(map(lambda s: s is not None, \
+                      batch.next_state)), device=device, dtype=bool)
+    non_final_next_states = cat([s for s in batch.next_state
                                                 if s is not None])
-    
-    state_batch = torch.cat(batch.state)
-    action_batch = torch.cat(batch.action)
-    reward_batch = torch.cat(batch.reward)
-    state_action_values = policy_Q(state_batch).gather(1, action_batch)
-    next_state_values = torch.zeros(BATCH_SIZE, device=device)
-    with torch.no_grad():
-        next_state_values[non_final_mask] = target_Q(non_final_next_states).max(1).values
+    state_batch = cat(batch.state)
+    action_batch = cat(batch.action).unsqueeze(-1)
+    reward_batch = cat(batch.reward)
+    state_action_values = policy_Q(state_batch).gather(-1, action_batch).sum(1)
+    next_state_values = zeros(BATCH_SIZE, device=device)
+    with no_grad():
+        n_f_n_s_rews = target_Q(non_final_next_states).max(-1).values
+        next_state_values[non_final_mask] = n_f_n_s_rews.sum(-1)
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
     # Compute Huber loss
     criterion = nn.SmoothL1Loss()
+    #print(state_action_values.shape)
+    #print(expected_state_action_values.unsqueeze(1).shape)
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
 
     # Optimize the model
     optimizer.zero_grad()
     loss.backward()
     # In-place gradient clipping
-    torch.nn.utils.clip_grad_value_(policy_Q.parameters(), 100)
+    nn.utils.clip_grad_value_(policy_Q.parameters(), 100)
     optimizer.step()
     
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+    
 def plot_reward(rewards, resp_marks=[], resp_values=[], result=False):
-    durations_t = torch.tensor(rewards, dtype=torch.float)
+    durations_t = tensor(rewards, dtype=float)
     plt.clf()
     plt.plot(durations_t.numpy(), '.', alpha=0.3, label='Episode reward')
     if len(durations_t) >= 100:
         means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
-        means = torch.cat((torch.zeros(99).fill_(durations_t.mean()), means))
+        means = cat((zeros(99).fill_(durations_t.mean()), means))
         plt.plot(means.numpy(), label='Mean')
     if result:
         plt.xlabel('Episode')
@@ -107,52 +126,53 @@ def plot_reward(rewards, resp_marks=[], resp_values=[], result=False):
     plt.draw()
     plt.gcf().canvas.flush_events()
     plt.pause(0.01)
-    
+
 def explore_rate_linear(x, e0, e1, e_decay):
     return e1 + (e0-e1) * np.maximum(1 - x / e_decay, 0)
-    
+
 def explore_rate_exp(x, e0, e1, e_decay):
     return e1 + (e0-e1) * np.exp(- x / e_decay)
     
-def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params):
+from torch import cuda,save,float32
+from tqdm import tqdm
+from pathlib import Path
+
+#Trainer
+def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params, rewards=[]):
     plt.ion()
     plt.figure(figsize=(12,6))
-    if torch.cuda.is_available():
-        num_episodes = params['N_EPS']
-    else:
-        num_episodes = params['N_EPS']
-        
-    
-    rewards = []
+    num_episodes = params['N_EPS']
+
     steps_done = 0
     stage = 0
     responsibility = [0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 1]
     eps_marks = []
     for i_episode in tqdm(range(num_episodes)):
         # Initialize the environment and get its state
-        state, _ = env.reset(True)
+        state, _ = env.reset()
         ep_reward = 0
-        state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+        state = tensor(state, dtype=float32, device=device).unsqueeze(0)
         eps_threshold = explore_rate_linear(steps_done, params['EPS_START'], params['EPS_END'], params['EPS_DECAY'])
         if (1 - eps_threshold > responsibility[stage]):
             stage += 1
             eps_marks.append(i_episode)
-            
+
         for t in count():
             action = select_action(state, env, policy_Q, eps_threshold, device)
             steps_done += 1
-            observation, reward, terminated, _ = env.step(action.item())
+            observation, reward, terminated, _ = env.step(action.tolist()[0])
             ep_reward += reward * params['GAMMA'] ** t
-            reward = torch.tensor([reward], device=device)
+            reward = tensor([reward], device=device)
             done = terminated
-            
-            
+
+
             if terminated:
                 next_state = None
             else:
-                next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
+                next_state = tensor(observation, dtype=float32, device=device).unsqueeze(0)
 
             # Store the transition in memory
+            #print(action)
             memory.push(state, action, next_state, reward)
 
             # Move to the next state
@@ -180,31 +200,10 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params)
     plt.show()
     res = params.copy()
     res['MODEL'] = target_Q.state_dict()
-    torch.save(res, res['VERSION']+'.pt')
+    save(res, res['VERSION']+'.pt')
+    return rewards
     
     
     
-def test(env, target_Q, device):
-    plt.imshow(env.surface)
-    for g in range(len(env.y_in)):
-        track = []
-        gate = env.y_in[g]
-        env.fleet[0].set_route(np.array([gate, 0]), env.closest_exit(gate))
-        state, pos = env.reset()
-        track.append(pos[0])
-        state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-        for t in count():
-            action = target_Q(state).argmax(keepdim=True)
-            #print(track[-1], env.fleet[0].v, end=' ')
-            observation, reward, terminated, new_pos = env.step(action.item())
-            track.append(new_pos[0])
-            #print(action.item(), ' -> ', track[-1], env.fleet[0].v)
-            done = terminated
-            if done:
-                break
-            state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
-        track = np.array(track)
-        plt.plot(track[:, 1], track[:,0], '.-', label=f'gate {g}', alpha=0.5)
-    plt.legend()
-    plt.show()
+
     

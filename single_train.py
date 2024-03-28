@@ -1,15 +1,14 @@
-from modules.Airport_env import *
-from modules.DRL_Agent import *
+from modules import *
 
 
 params = {
-    'VERSION': 'Pilot_v1.5_test',
-    'BATCH_SIZE': 5,
+    'VERSION': 'Dispatcher_v1',
+    'BATCH_SIZE': 200,
     'GAMMA': 0.99,
     'EPS_START': 0.9,
     'EPS_END': 0.05,
-    'EPS_DECAY': 6,
-    'N_EPS': 10000,
+    'EPS_DECAY': 5000,
+    'N_EPS': 5000,
     'REPORT': 500,
     'LR': 1e-4,
     'TAU': 0.2
@@ -39,12 +38,12 @@ ax[1].imshow(Main_surface)
 plt.show()
 
 env = Airport(Main_surface)
-env.add(1)
-policy_Q=create_model(env.fleet[0].mobility)
-target_Q=create_model(env.fleet[0].mobility)
+env.add(4)
+policy_Q=DispatcherRL(env.fleet[0].mobility, k_outputs=4)
+target_Q=DispatcherRL(env.fleet[0].mobility, k_outputs=4)
 target_Q.load_state_dict(policy_Q.state_dict())
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(policy_Q.parameters(), lr=params['LR'])
+optimizer = Adam(policy_Q.parameters(), lr=params['LR'])
 device = "cpu"
 memory = ReplayMemory(10000)
 
