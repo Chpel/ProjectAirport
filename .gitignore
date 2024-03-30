@@ -2,6 +2,6 @@
 __pycache__/
 pics/
 *.png
-*.ipynb
+.ipynb_checkpoints/
 Anaconda Prompt (RL).lnk
 *.npy
