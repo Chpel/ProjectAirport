@@ -5,3 +5,6 @@ pics/
 .ipynb_checkpoints/
 Anaconda Prompt (RL).lnk
 *.npy
+*.gif
+work.py
+Dispatcher_test.pt

@@ -29,26 +29,27 @@ class DispatcherRL(nn.Module):
         super(DispatcherRL, self).__init__()
         self.k_nns = k_agents
         self.k_actors = k_outputs
+        self.k_actions = k_actions
         if k_agents == 1: #Dispatcher
-            self.model = nn.Sequential( # 1x(1+fleet)x9x10
-            nn.Conv2d(1+k_outputs,8,(3,3), stride=1), #1x8x7x8
+            self.model = nn.Sequential( # 1xfleetx2x9x10
+            nn.Conv3d(k_outputs,8,(2,3,3), stride=1), #1x8x1x7x8
             nn.ReLU(),
+            nn.Flatten(2,3), #1x8x7x8
             nn.Conv2d(8,16,(3,3), stride=1), #1x16x5x6
             nn.ReLU(),
             nn.Conv2d(16,32,(3,3), stride=1), #1x32x3x5
             nn.ReLU(),
             nn.Conv2d(32,64,(3,3), stride=1), #1x64x1x2
             nn.ReLU(),
-            nn.Flatten(1)) #1x128
+            nn.Flatten(1),
+            nn.Linear(128, k_actions * k_outputs)) #1x128
 
-            self.fcs = nn.ModuleList([nn.Linear(128, k_actions) for i in range(k_outputs)])
         else:
             pass #Decentralized
 
     def forward(self, x): #Centralised only (yet)
         x = self.model(x)
-        res = [l(x) for l in self.fcs]
-        return stack(res, dim=1)
+        return x.unfold(1, self.k_actions, self.k_actions) #1xfleetxactions
         
 #eps-greedy Explorer
 from torch import no_grad,long,randint
@@ -98,13 +99,21 @@ def optimize_model(policy_Q, target_Q, optimizer, memory, BATCH_SIZE, GAMMA, dev
     optimizer.step()
     
 import numpy as np
+
+
 import matplotlib
 import matplotlib.pyplot as plt
     
-def plot_reward(rewards, resp_marks=[], resp_values=[], result=False):
-    durations_t = tensor(rewards, dtype=float)
+def plot_reward(rewards, resp_marks=[], resp_values=[], result=False, interactive=True):
+    rews, codes = np.array(rewards, dtype=float).T
     plt.clf()
-    plt.plot(durations_t.numpy(), '.', alpha=0.3, label='Episode reward')
+    colors = ['red', 'black', 'blue', 'green']
+    un_codes = [-2,-1, 1, 2]
+    labels = ['complete fail', 'truncation', 'semi-success', 'complete success']
+    x = np.arange(1, len(rews)+1)
+    for i, c in enumerate(un_codes):
+        plt.scatter(x[codes == c], rews[codes == c], c=colors[i], alpha=0.3, label=labels[i]) if (codes==c).sum() > 0 else None
+    durations_t = tensor(rews, dtype=float)
     if len(durations_t) >= 100:
         means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
         means = cat((zeros(99).fill_(durations_t.mean()), means))
@@ -123,9 +132,10 @@ def plot_reward(rewards, resp_marks=[], resp_values=[], result=False):
             plt.axvline(r, ymin=0.52)
             _, _, ymin, ymax = plt.axis()
             plt.text(r, ymin + (ymax - ymin) * 0.5, str(resp_values[i]), rotation='vertical')
-    plt.draw()
-    plt.gcf().canvas.flush_events()
-    plt.pause(0.01)
+    if interactive:
+        plt.draw()
+        plt.gcf().canvas.flush_events()
+        plt.pause(0.01)
 
 def explore_rate_linear(x, e0, e1, e_decay):
     return e1 + (e0-e1) * np.maximum(1 - x / e_decay, 0)
@@ -152,7 +162,7 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params,
         state, _ = env.reset()
         ep_reward = 0
         state = tensor(state, dtype=float32, device=device).unsqueeze(0)
-        eps_threshold = explore_rate_linear(steps_done, params['EPS_START'], params['EPS_END'], params['EPS_DECAY'])
+        eps_threshold = explore_rate_linear(i_episode, params['EPS_START'], params['EPS_END'], params['EPS_DECAY'])
         if (1 - eps_threshold > responsibility[stage]):
             stage += 1
             eps_marks.append(i_episode)
@@ -160,13 +170,12 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params,
         for t in count():
             action = select_action(state, env, policy_Q, eps_threshold, device)
             steps_done += 1
-            observation, reward, terminated, _ = env.step(action.tolist()[0])
+            observation, reward, ep_code, _ = env.step(action.tolist()[0])
             ep_reward += reward * params['GAMMA'] ** t
             reward = tensor([reward], device=device)
-            done = terminated
 
 
-            if terminated:
+            if ep_code != 0:
                 next_state = None
             else:
                 next_state = tensor(observation, dtype=float32, device=device).unsqueeze(0)
@@ -189,19 +198,19 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params,
                 target_net_state_dict[key] = policy_net_state_dict[key]*params['TAU'] + target_net_state_dict[key]*(1-params['TAU'])
             target_Q.load_state_dict(target_net_state_dict)
 
-            if done:
-                rewards.append(ep_reward)
+            if ep_code != 0:
+                rewards.append((ep_reward, ep_code))
                 if (i_episode) % params['REPORT'] == 0:
                     plot_reward(rewards, resp_marks=eps_marks, resp_values=responsibility[:stage])
                 break
     print('Complete')
-    plot_reward(rewards, result=True)
+    plot_reward(rewards, resp_marks=eps_marks, resp_values=responsibility[:stage], result=True)
     plt.ioff()
     plt.show()
     res = params.copy()
     res['MODEL'] = target_Q.state_dict()
     save(res, res['VERSION']+'.pt')
-    return rewards
+    return rewards, eps_marks, responsibility[:stage]
     
     
     

@@ -5,16 +5,17 @@ import matplotlib.pyplot as plt
 class Airport:
     class Plane:
         def __init__(self, start: np.ndarray, end: np.ndarray):
-            # position, direction
+            # position (current, previous, starting and planned), direction
             self.pos = start.copy()
+            self.prev = start.copy()
             self.start = start.copy()
             self.dest = end.copy()
             self.v = 0
-            # activity inside the enviroment
-            # active plane is able to move and execute commands from agent
-            self.active = True
-            # visible plane is interactive with other (can be an obstacle)
-            self.visible = True
+            # plane activity inside the enviroment
+            # 0: plane is able to move and execute commands from agent
+            # 1: plane finished the task (non-active and non-interacting with active agents)
+            #-1: plane failed (non-active, but still interacts with agents (being an obstacle))
+            self.status = 0
             # movement properties dx, dy
             self.vectors = np.array([[1,0], [1,1], [0,1],
                                    [-1,1], [-1,0], [-1,-1],
@@ -23,21 +24,24 @@ class Airport:
             self.len_v = len(self.vectors)
             self.mobility = len(self.movements)
             #rewards_dict
-            self.rewards = {'non-taxi': -2, 'wrong-gate': -1, 
-                            'corr-gate': 5, 'inactive': 0, 
-                            'ok': 0, 'reverse': -0.1}
+            self.rewards = {'non-taxi': -1, 
+                            'wrong-gate': 0.25, 
+                            'corr-gate': 1,
+                            'inactive': 0, 
+                            'ok': -0.01}
 
-        def reset(self, force_act=True, force_vis=True):
+        def reset(self):
             self.pos = self.start.copy()
+            self.prev = self.start.copy()
             self.v = 0
-            self.active = force_act
-            self.visible = force_vis
+            self.status = 0
 
         def step(self, choice):
-            if not self.active:
+            if self.status != 0:
                 return
             move = self.vectors[(self.v + self.movements[choice, 0]) % self.len_v]
             self.v = (self.v + self.movements[choice, 1]) % self.len_v
+            self.prev[:] = self.pos
             self.pos += move[::-1] * self.movements[choice, 2]
 
         def save(self):
@@ -49,28 +53,41 @@ class Airport:
 
         def state(self, shape):
             image = np.zeros(shape)
-            if self.visible:
+            if self.status <= 0:
                 image[self.pos[0], self.pos[1]] = 1
                 direct = self.pos + self.vectors[self.v][::-1]
                 if np.all(0 <= direct) and np.all(direct < shape):
                     image[direct[0], direct[1]] = -1
-            image[self.dest[0], self.dest[1]] = 10 #destination
             return image, self.pos
 
         def reward(self, permit):
-            if not self.active:
-                return self.rewards['inactive'], False
+            if self.status != 0:
+                return self.rewards['inactive']
             if permit == 0: #non taxi-way
-                self.active = False
-                return self.rewards['non-taxi'], True
+                self.status = -1
+                return self.rewards['non-taxi']
             if self.pos[1] == self.dest[1]: #task done
-                self.active = False
-                self.visible = False
-                return (self.rewards['corr-gate'] if self.pos[0] == self.dest[0] else self.rewards['wrong-gate']), True
-            return self.rewards['ok'] + (self.rewards['reverse'] if self.vectors[self.v][0] < 0 else 0), False
+                self.status = 1
+                return (self.rewards['corr-gate'] if self.pos[0] == self.dest[0] else self.rewards['wrong-gate'])
+            return self.rewards['ok']
 
         def __eq__(self, other):
-            return np.all(self.pos == other.pos) and self.visible and other.visible
+            # objects stopped at the same point
+            eq_full = np.all(self.pos == other.pos)
+            # vertical intersection
+            ver_inter = (self.pos[0] == other.pos[0]) \
+                        and (self.prev[0] == other.prev[0])\
+                        and (self.pos[1] == other.prev[1]) \
+                        and (self.prev[1] == other.pos[1])
+            # horizontal intersection
+            ver_inter = (self.pos[1] == other.pos[1]) \
+                        and (self.prev[1] == other.prev[1]) \
+                        and (self.pos[0] == other.prev[0]) \
+                        and (self.prev[0] == other.pos[0])
+            # oncoming traffic
+            aga_inter = np.all(self.pos == other.prev) and np.all(self.prev == other.pos)
+            return (eq_full or ver_inter or ver_inter or aga_inter) \
+                   and self.status <= 0 and other.status <= 0
 
 
     def __init__(self, surface: np.ndarray, k_fleet=1):
@@ -82,11 +99,13 @@ class Airport:
         self.cur_map = surface.copy()
         # fleet properties
         self.fleet = []
+        self.statuses = np.array([0,0,0])
         # time
         self.t = 0
         self.max_t = 15
         #rewards
-        self.rewards = {'crash': -2, 'ok': 0.02, 'stop': -0.1}
+        self.rewards = {'crash': -1,
+                        'stop': -0.1}
 
     def closest_exit(self, y):
         return np.array([self.y_out[np.argmin(np.abs(self.y_out - y))], self.max_x])
@@ -104,46 +123,41 @@ class Airport:
                 self.fleet[i].set_route(np.array([y0, 0]), self.closest_exit(y0))
         for p in self.fleet:
             p.reset()
-        return self.c_state()
+        self.statuses[:] = 0
+        self.statuses[1] = len(self.fleet)
+        return self.state()
+       
+    def update_stat(self):
+        self.statuses[:] = 0 
+        for p in self.fleet:
+            self.statuses[p.status + 1] += 1
+          
+    def result_code(self):
+        if (self.statuses[1] == 0):
+            if (self.statuses[0] == len(self.fleet)):
+                return -2 #complete failure
+            if (self.statuses[2] == len(self.fleet)):
+                return 2 #complete success
+            return 1 #semi-success
+        if (self.t > self.max_t):
+            return -1 #episode truncation
+        return 0 #episode continues
 
-    def is_active(self):
-        for i, p in enumerate(self.fleet):
-            if p.active:
-                return True
-        return False
-
-    def c_state(self):
+    def state(self):
         # complete image of all agents
-        # (len([map + 4*(pos & dest)]), map.shape[0], map.shape[1])
-        res = np.zeros((len(self.fleet)+1, *self.surface.shape))
-        all_pos = np.zeros((len(self.fleet), 2))
-        res[0] = self.surface.copy() #map
-        for i, p in enumerate(self.fleet):
-            res[i+1], all_pos[i] = p.state(self.surface.shape) #position
-        return res, all_pos
-
-    def dc_state(self):
-        # list of images of all autonomous agents
-        # (len.fleet, len([map, pos, other_pos]), map.shape[0], map.shape[1])
-        res = np.zeros((len(self.fleet), 3, *self.surface.shape))
+        # (len([4, map + (pos & dest)]), map.shape[0], map.shape[1])
+        res = np.zeros((len(self.fleet), 2, *self.surface.shape))
         all_pos = np.zeros((len(self.fleet), 2))
         for i, p in enumerate(self.fleet):
-            all_pos[i] = p.pos.copy()
-        for i, p in enumerate(self.fleet):
-            res[i,0] = self.surface.copy()
-            res[i,1], _ = p.state(self.surface.shape)
-            res[i,1, p.dest, -1] = 2
-            for j, o_p in enumerate(all_pos):
-                res[i, 2, o_p[1], o_p[0]] = 1 if i != j and o_p.visible else 0
+            res[i,0] = self.surface.copy() #map
+            res[i, 0, p.dest[0], p.dest[1]] = 10 #destination
+            res[i,1], all_pos[i] = p.state(self.surface.shape) #position
         return res, all_pos
 
-
-    def c_reward(self, choice):
-        # All or Nothing responsibilty
-        # Ep_stop if every plane are inactive (by failure either success)
+    def reward(self, choice):
         r = 0
         for i, p in enumerate(self.fleet):
-            if not p.active:
+            if p.status != 0:
                 continue
             if choice[i] == 5:
                 r += self.rewards['stop']
@@ -152,25 +166,11 @@ class Airport:
                 if i == j:
                     continue
                 if p == p1: # crash between planes
-                    p.active = False
+                    p.status = -1
                     r += self.rewards['crash']
-            r0, err = p.reward(self.surface[p.pos[0], p.pos[1]])
+            r0 = p.reward(self.surface[p.pos[0], p.pos[1]])
             r += r0
-        return r, not self.is_active()
-
-    def dc_reward(self):
-        # Minimal responsibilty
-        # The episode when all planes become inactive
-        rs = np.zeros(len(self.fleet))
-        for i, p in enumerate(self.fleet):
-            for j, p1 in enumerate(self.fleet):
-                if i == j:
-                    continue
-                if p == p1 and p.active: # crash between planes
-                    p.active = False
-                    rs[i] += self.rewards['crash']
-            rs[i] += p.reward(self.surface[p.pos[0], p.pos[1]])
-        return rs, not self.is_active()
+        return r
 
     def step(self, choice):
         self.t += 1
@@ -178,8 +178,10 @@ class Airport:
         for i, p in enumerate(self.fleet):
             p.step(choice[i])
         # reward
-        r, ep_end = self.c_reward(choice)
+        r = self.reward(choice)
         # new state after reward calc
-        new_state, pos = self.c_state()
-        #end of episode
-        return new_state, r, ep_end or (self.t > self.max_t), pos
+        new_state, pos = self.state()
+        # Episode result codes
+        self.update_stat()
+        res = self.result_code()
+        return new_state, r, res, pos
