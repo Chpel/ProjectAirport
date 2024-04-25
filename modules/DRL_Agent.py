@@ -52,15 +52,20 @@ class DispatcherRL(nn.Module):
         return x.unfold(1, self.k_actions, self.k_actions) #1xfleetxactions
         
 #eps-greedy Explorer
-from torch import no_grad,long,randint
+from torch import no_grad,long,randint,rand
 
 def select_action(state, env, Q, eps_threshold, device):
-    sample = np.random.random()
+    #sample = rand(len(env.fleet))
+    #with no_grad():
+    #    res = Q(state).argmax(dim=-1)
+    #res[:,sample < eps_threshold] = randint(0,6,(1,(sample < eps_threshold).sum().item(),), device=device, dtype=long)
+    sample = rand(1).item()
     if sample > eps_threshold:
         with no_grad():
-            return Q(state).argmax(dim=-1)
+            res = Q(state).argmax(dim=-1)
     else:
-        return randint(0,6,(1,len(env.fleet),), device=device, dtype=long)
+        res = randint(0,6,(1,len(env.fleet),), device=device, dtype=long)
+    return res
    
 #DRL_optimizer   
 from torch import tensor,bool,cat,zeros

@@ -102,10 +102,10 @@ class Airport:
         self.statuses = np.array([0,0,0])
         # time
         self.t = 0
-        self.max_t = 15
+        self.max_t = 12
         #rewards
         self.rewards = {'crash': -1,
-                        'stop': -0.1}
+                        'stop': -0.2}
 
     def closest_exit(self, y):
         return np.array([self.y_out[np.argmin(np.abs(self.y_out - y))], self.max_x])

@@ -64,7 +64,7 @@ def gif_trajectory(env, path, rs):
         return pscatt,
 
     ani = animation.FuncAnimation(fig, animate, repeat=True,
-                                        frames=len(path)-1, interval=500)
+                                        frames=len(path), interval=500)
 
     # To save the animation using Pillow as a gif
     writer = animation.PillowWriter(fps=2,

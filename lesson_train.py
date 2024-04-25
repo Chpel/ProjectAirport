@@ -1,16 +1,17 @@
 from modules import *
+from torch import load
 
 params = {
-    'VERSION': 'Dispatcher_test',
+    'VERSION': 'Dispatcher_3to4',
     'BATCH_SIZE': 500,
     'GAMMA': 0.99,
-    'EPS_START': 0.9,
-    'EPS_END': 0.01,
-    'N_EPS': 15000,
-    'EPS_DECAY': 10000,
+    'EPS_START': 0.3,
+    'EPS_END': 0.05,
+    'N_EPS': 5000,
+    'EPS_DECAY': 4500,
     'REPORT': 500,
     'LR': 1e-4,
-    'TAU': 0.1
+    'TAU': 0.01
     }
 
 
@@ -39,15 +40,22 @@ plt.show()
 env = Airport(Main_surface)
 k_planes = 4
 env.add(k_planes)
-policy_Q=DispatcherRL(env.fleet[0].mobility, k_outputs=k_planes)
 target_Q=DispatcherRL(env.fleet[0].mobility, k_outputs=k_planes)
-target_Q.load_state_dict(policy_Q.state_dict())
+policy_Q=DispatcherRL(env.fleet[0].mobility, k_outputs=k_planes)
+target_Q.load_state_dict(load(params['VERSION']+'.pt')['MODEL'])
+policy_Q.load_state_dict(target_Q.state_dict())
 criterion = nn.CrossEntropyLoss()
 optimizer = Adam(policy_Q.parameters(), lr=params['LR'])
 device = "cpu"
 memory = ReplayMemory(10000)
 
+
+with no_grad():
+    traj1, rew1 = test(env, target_Q, device)
+animate_trajectory(env, traj1, rew1)
+
 train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params)
+
 with no_grad():
     traj1, rew1 = test(env, target_Q, device)
 animate_trajectory(env, traj1, rew1)

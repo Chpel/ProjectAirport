@@ -2,7 +2,7 @@ from modules import *
 from torch import load
 
 params = {
-    'VERSION': 'Dispatcher_3of4',
+    'VERSION': 'Dispatcher_test',
     }
 
 
@@ -32,3 +32,4 @@ device='cpu'
 
 traj1, rew1 = test(env, target_Q, device)
 gif_trajectory(env, traj1, rew1)
+
