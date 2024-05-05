@@ -1,4 +1,4 @@
-from modules.DRL_Agent import *
+from modules.TrainDQN import *
 
 def test(env, target_Q, device):
     state, pos = env.reset()

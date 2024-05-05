@@ -1,3 +1,4 @@
 from .Airport_env import Airport
-from .DRL_Agent import *
+from .AgentDRL import *
 from .tests import *
+from .TrainDQN import *

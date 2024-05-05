@@ -2,7 +2,7 @@ from modules import *
 from torch import load
 
 params = {
-    'VERSION': 'Dispatcher_test',
+    'VERSION': 'Dispatcher_3.5of4s1',
     }
 
 
@@ -12,7 +12,7 @@ fig, ax = plt.subplots(1,1, figsize=(7,6));
 Main_surface = np.array(
    [[0,0,0,0,0,0,0,0,0,0],
     [1,1,1,1,1,0,1,1,0,0],
-    [0,0,0,0,1,1,1,1,1,1],
+    [0,0,0,0,1,1,1,1,0,0],
     [1,1,1,1,1,0,1,1,0,0],
     [0,0,0,0,1,1,1,1,0,0],
     [1,1,1,1,1,1,0,1,1,1],
