@@ -4,13 +4,13 @@ params = {
     'VERSION': 'Dispatcher_test',
     'BATCH_SIZE': 500,
     'GAMMA': 0.99,
-    'EPS_START': 0.9,
+    'EPS_START': 0.5,
     'EPS_END': 0.05,
-    'N_EPS': 10000,
-    'EPS_DECAY': 9000,
+    'N_EPS': 15000,
+    'EPS_DECAY': 12500,
     'REPORT': 500,
-    'LR': 1e-4,
-    'TAU': 0.1
+    'LR': 5e-4,
+    'TAU': 0.2
     }
 
 
@@ -42,7 +42,9 @@ env.add(k_planes)
 policy_Q=DispatcherRL_M(env.fleet[0].mobility, k_outputs=k_planes)
 target_Q=DispatcherRL_M(env.fleet[0].mobility, k_outputs=k_planes)
 target_Q.load_state_dict(policy_Q.state_dict())
-criterion = nn.CrossEntropyLoss()
+# Compute Huber loss
+criterion = nn.SmoothL1Loss()
+#optimizer = Adagrad(policy_Q.parameters(), lr=params['LR'], lr_decay=1e-6)
 optimizer = Adam(policy_Q.parameters(), lr=params['LR'])
 device = "cpu"
 memory = ReplayMemory(10000)

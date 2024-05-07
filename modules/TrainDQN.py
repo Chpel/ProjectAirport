@@ -33,10 +33,10 @@ def select_action(state, env, Q, eps_threshold, device):
     return res
    
 #DRL_optimizer   
-from torch import tensor,bool,cat,zeros
+from torch import tensor,bool,cat,zeros,nn
 from torch.optim import Adam
 
-def optimize_model(policy_Q, target_Q, optimizer, memory, BATCH_SIZE, GAMMA, device):
+def optimize_model(policy_Q, target_Q, criterion, optimizer, memory, BATCH_SIZE, GAMMA, device):
     if len(memory) < BATCH_SIZE:
         return
     transitions = memory.sample(BATCH_SIZE)
@@ -56,8 +56,6 @@ def optimize_model(policy_Q, target_Q, optimizer, memory, BATCH_SIZE, GAMMA, dev
         next_state_values[non_final_mask] = n_f_n_s_rews.sum(-1)
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
-    # Compute Huber loss
-    criterion = nn.SmoothL1Loss()
     #print(state_action_values.shape)
     #print(expected_state_action_values.unsqueeze(1).shape)
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
@@ -158,22 +156,24 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params,
             # Move to the next state
             state = next_state
 
-            # Perform one step of the optimization (on the policy network)
-            optimize_model(policy_Q, target_Q, optimizer, memory, params['BATCH_SIZE'], params['GAMMA'], device)
-
-            # Soft update of the target network's weights
-            # θ′ ← τ θ + (1 −τ )θ′
-            target_net_state_dict = target_Q.state_dict()
-            policy_net_state_dict = policy_Q.state_dict()
-            for key in policy_net_state_dict:
-                target_net_state_dict[key] = policy_net_state_dict[key]*params['TAU'] + target_net_state_dict[key]*(1-params['TAU'])
-            target_Q.load_state_dict(target_net_state_dict)
-
             if ep_code != 0:
                 rewards.append((ep_reward, ep_code))
                 if (i_episode) % params['REPORT'] == 0:
                     plot_reward(rewards, resp_marks=eps_marks, resp_values=responsibility[:stage])
                 break
+                
+        # Perform one step of the optimization (on the policy network)
+        optimize_model(policy_Q, target_Q, criterion, optimizer, memory, params['BATCH_SIZE'], params['GAMMA'], device)
+
+        # Soft update of the target network's weights
+        # θ′ ← τ θ + (1 −τ )θ′
+        target_net_state_dict = target_Q.state_dict()
+        policy_net_state_dict = policy_Q.state_dict()
+        for key in policy_net_state_dict:
+            target_net_state_dict[key] = policy_net_state_dict[key]*params['TAU'] + target_net_state_dict[key]*(1-params['TAU'])
+        target_Q.load_state_dict(target_net_state_dict)
+
+            
     print('Complete')
     plot_reward(rewards, resp_marks=eps_marks, resp_values=responsibility[:stage], result=True)
     plt.ioff()
