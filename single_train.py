@@ -5,13 +5,16 @@ params = {
     'BATCH_SIZE': 500,
     'GAMMA': 0.99,
     'EPS_START': 0.5,
-    'EPS_END': 0.05,
+    'EPS_END': 0.01,
     'N_EPS': 15000,
-    'EPS_DECAY': 12500,
+    'EPS_DECAY': 13000,
     'REPORT': 500,
-    'LR': 5e-4,
-    'TAU': 0.2
+    'MEMORY': 10000,
+    'LR': 1e-4,
+    'TAU': 0.1
     }
+
+manual_seed(1234)
 
 
 fig, ax = plt.subplots(1,2, figsize=(12,6));
@@ -38,7 +41,7 @@ plt.show()
 
 env = Airport(Main_surface)
 k_planes = 4
-env.add(k_planes)
+env.add(k_planes, True)
 policy_Q=DispatcherRL_M(env.fleet[0].mobility, k_outputs=k_planes)
 target_Q=DispatcherRL_M(env.fleet[0].mobility, k_outputs=k_planes)
 target_Q.load_state_dict(policy_Q.state_dict())
@@ -47,7 +50,7 @@ criterion = nn.SmoothL1Loss()
 #optimizer = Adagrad(policy_Q.parameters(), lr=params['LR'], lr_decay=1e-6)
 optimizer = Adam(policy_Q.parameters(), lr=params['LR'])
 device = "cpu"
-memory = ReplayMemory(10000)
+memory = ReplayMemory(params['MEMORY'])
 
 train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params)
 with no_grad():

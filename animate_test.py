@@ -2,7 +2,7 @@ from modules import *
 from torch import load
 
 params = {
-    'VERSION': 'Dispatcher_3.5of4s1',
+    'VERSION': 'Dispatcher_3.5of4',
     }
 
 
@@ -12,7 +12,7 @@ fig, ax = plt.subplots(1,1, figsize=(7,6));
 Main_surface = np.array(
    [[0,0,0,0,0,0,0,0,0,0],
     [1,1,1,1,1,0,1,1,0,0],
-    [0,0,0,0,1,1,1,1,0,0],
+    [0,0,0,0,1,1,1,1,1,1],
     [1,1,1,1,1,0,1,1,0,0],
     [0,0,0,0,1,1,1,1,0,0],
     [1,1,1,1,1,1,0,1,1,1],
@@ -27,8 +27,11 @@ env = Airport(Main_surface)
 k_planes = 4
 env.add(k_planes)
 target_Q=DispatcherRL(env.fleet[0].mobility, 1, k_planes)
-target_Q.load_state_dict(load(params['VERSION']+'.pt')['MODEL'])
+model = load('models/'+params['VERSION']+'.pt')
+target_Q.load_state_dict(model['MODEL'])
 device='cpu'
+for key in model.keys():
+    print(key, model[key]) if key != 'MODEL' else 0
 
 traj1, rew1 = test(env, target_Q, device)
 gif_trajectory(env, traj1, rew1)

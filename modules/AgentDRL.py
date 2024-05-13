@@ -1,5 +1,5 @@
 #DRL_Agent
-from torch import nn,stack,cat
+from torch import nn,stack,cat,unflatten
 
 class DispatcherRL(nn.Module): #Single-trainer
     def __init__(self, k_actions, k_agents=1, k_outputs=1, device='cpu'):
@@ -27,7 +27,8 @@ class DispatcherRL(nn.Module): #Single-trainer
     def forward(self, x): #Centralised only (yet)
         x = self.model(x)
         return x.unfold(1, self.k_actions, self.k_actions) #1xfleetxactions
-        
+       
+
 class DispatcherRL_M(nn.Module): #MARL
     def __init__(self, k_actions, k_agents=1, k_outputs=1, device='cpu'):
         super(DispatcherRL_M, self).__init__()
@@ -35,27 +36,29 @@ class DispatcherRL_M(nn.Module): #MARL
         self.k_actors = k_outputs
         self.k_actions = k_actions
         if k_agents == 1: #Dispatcher
-            self.sm = nn.Sequential( # 1xfleetx(2x9x10)
-                nn.Conv3d(k_outputs,k_outputs*4,(2,3,3), stride=1, device=device, groups=4), #1x8x(1x7x8)
+            self.sm = nn.Sequential( # bxfx2x9x10
+                nn.Flatten(0,1), #(bxf)x2x9x10
+                nn.Conv2d(2,4,(3,3), stride=1, device=device, groups=1), #(bxf)x4x7x8
                 nn.ReLU(),
-                nn.Flatten(2,3), #1x8x7x8
-                nn.Conv2d(k_outputs*4,k_outputs*8,(3,3), stride=1, device=device, groups=4), #1x16x(5x6)
+                nn.Conv2d(4,8,(3,3), stride=1, device=device, groups=1), #(bxf)x8x5x6
                 nn.ReLU(),
-                nn.Conv2d(k_outputs*8,k_outputs*16,(3,3), stride=1, device=device, groups=4), #1x32x(3x4)
+                nn.Conv2d(8,16,(3,3), stride=1, device=device, groups=1), #(bxf)x16x3x5
                 nn.ReLU(),
-                nn.Conv2d(k_outputs*16,k_outputs*32,(3,3), stride=1, device=device, groups=1), #1x64x(1x2)
+                nn.Conv2d(16,32,(3,3), stride=1, device=device, groups=1), #(bxf)x32x1x2
                 nn.ReLU(),
-                nn.Flatten(2,3), #1x64x2
-                nn.Conv1d(k_outputs*32,k_outputs*64,2, stride=1, device=device, groups=1), #1x(128x1)
-                nn.Flatten(1)) #1x128
+                nn.Flatten(1)) #(bxf)x64
 
-            self.dispatcher = nn.Sequential(
-                nn.Linear(64 * k_outputs, k_actions * k_outputs, device=device)) #1x128
+            self.dispatcher = nn.Sequential(# bxfx64
+                nn.Flatten(1), #bx(fx64)
+                nn.Linear(64 * k_outputs, k_actions * k_outputs, device=device)) #bx(fxa)
 
         else:
             pass #Decentralized
 
     def forward(self, x): #Centralised only (yet)
+        b = x.shape[0]
+        f = x.shape[1]
         x = self.sm(x)
+        x = unflatten(x, 0, (b, f))
         x = self.dispatcher(x)
         return x.unfold(1, self.k_actions, self.k_actions) #1xfleetxactions

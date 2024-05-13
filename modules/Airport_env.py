@@ -114,18 +114,16 @@ class Airport:
     def closest_exit(self, y):
         return np.array([self.y_out[np.argmin(np.abs(self.y_out - y))], self.max_x])
 
-    def add(self, k):
+    def add(self, k, chkbrd=False):
         assert k <= len(self.y_in), 'Переполнение входов'
+        xs = [0,1] * 2 if chkbrd else [0] * 4            
         for i in range(k):
-            self.fleet.append(Plane(np.array([self.y_in[i], 0]), self.closest_exit(self.y_in[i])))
+            self.fleet.append(Plane(np.array([self.y_in[i], xs[i]]), self.closest_exit(self.y_in[i])))
 
     def reset(self, shock=False):
         self.t = self.t0
         for p in self.fleet:
             p.reset()
-        if shock:
-            for p in self.fleet:
-                p.set_route(p.start, self.closest_exit(p.start))
         self.statuses[:] = 0
         self.statuses[1] = len(self.fleet)
         return self.state()

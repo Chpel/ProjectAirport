@@ -112,7 +112,7 @@ def explore_rate_linear(x, e0, e1, e_decay):
 def explore_rate_exp(x, e0, e1, e_decay):
     return e1 + (e0-e1) * np.exp(- x / e_decay)
     
-from torch import cuda,save,float32
+from torch import cuda,save,float32,manual_seed
 from tqdm import tqdm
 from pathlib import Path
 
@@ -124,7 +124,7 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params,
 
     steps_done = 0
     stage = 0
-    responsibility = [0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 1]
+    responsibility = np.round(1 - np.linspace(params['EPS_START'], 0,7),2)
     eps_marks = []
     for i_episode in tqdm(range(num_episodes)):
         # Initialize the environment and get its state
@@ -155,23 +155,24 @@ def train(env, policy_Q, target_Q, criterion, optimizer, memory, device, params,
 
             # Move to the next state
             state = next_state
+            
+            
+            # Perform one step of the optimization (on the policy network)
+            optimize_model(policy_Q, target_Q, criterion, optimizer, memory, params['BATCH_SIZE'], params['GAMMA'], device)
+
+            # Soft update of the target network's weights
+            # θ′ ← τ θ + (1 −τ )θ′
+            target_net_state_dict = target_Q.state_dict()
+            policy_net_state_dict = policy_Q.state_dict()
+            for key in policy_net_state_dict:
+                target_net_state_dict[key] = policy_net_state_dict[key]*params['TAU'] + target_net_state_dict[key]*(1-params['TAU'])
+            target_Q.load_state_dict(target_net_state_dict)
 
             if ep_code != 0:
                 rewards.append((ep_reward, ep_code))
                 if (i_episode) % params['REPORT'] == 0:
                     plot_reward(rewards, resp_marks=eps_marks, resp_values=responsibility[:stage])
                 break
-                
-        # Perform one step of the optimization (on the policy network)
-        optimize_model(policy_Q, target_Q, criterion, optimizer, memory, params['BATCH_SIZE'], params['GAMMA'], device)
-
-        # Soft update of the target network's weights
-        # θ′ ← τ θ + (1 −τ )θ′
-        target_net_state_dict = target_Q.state_dict()
-        policy_net_state_dict = policy_Q.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key]*params['TAU'] + target_net_state_dict[key]*(1-params['TAU'])
-        target_Q.load_state_dict(target_net_state_dict)
 
             
     print('Complete')
