@@ -5,7 +5,7 @@ params = {
     'BATCH_SIZE': 500,
     'GAMMA': 0.99,
     'EPS_START': 0.5,
-    'EPS_END': 0.01,
+    'EPS_END': 0.05,
     'N_EPS': 15000,
     'EPS_DECAY': 13000,
     'REPORT': 500,
@@ -15,6 +15,7 @@ params = {
     }
 
 manual_seed(1234)
+random.seed(1234)
 
 
 fig, ax = plt.subplots(1,2, figsize=(12,6));
