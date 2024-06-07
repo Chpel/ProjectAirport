@@ -6,7 +6,7 @@ params = {
     'GAMMA': 0.99,
     'EPS_START': 0.5,
     'EPS_END': 0.05,
-    'N_EPS': 15000,
+    'N_EPS': 17000,
     'EPS_DECAY': 13000,
     'REPORT': 500,
     'MEMORY': 10000,
@@ -42,7 +42,7 @@ plt.show()
 
 env = Airport(Main_surface)
 k_planes = 4
-env.add(k_planes, True)
+env.add(k_planes)
 policy_Q=DispatcherRL_M(env.fleet[0].mobility, k_outputs=k_planes)
 target_Q=DispatcherRL_M(env.fleet[0].mobility, k_outputs=k_planes)
 target_Q.load_state_dict(policy_Q.state_dict())

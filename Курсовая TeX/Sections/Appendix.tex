@@ -1,0 +1,32 @@
+\appendix
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{full_history1.png}
+    \includegraphics[width=\textwidth]{full_history2.png}
+    \caption{History of the training episode rewards of the model of the single flight (planes from the first and the second gates) during base training (on the left from the vertical line) and during the after-shock retraining (on the right after the vertical line). The dots are the values of the each episode reward: red dots are failed episodes, black dot are truncated episode with no certain result, green dots are successful episodes.
+    Blue line is the moving average through 100 episodes.}
+    \label{fig:rew_graph12}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{full_history3.png}
+    \includegraphics[width=\textwidth]{full_history4.png}
+    \caption{History of the training episode rewards of the model of the single flight (planes from the third and the fourth gates) during base training (on the left from the vertical line) and during the after-shock retraining (on the right after the vertical line). The dots are the values of the each episode reward: red dots are failed episodes, black dot are truncated episode with no certain result, green dots are successful episodes.
+    Blue line is the moving average through 100 episodes.}
+    \label{fig:rew_graph34}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{shock_scheme1.png}
+    \includegraphics[width=0.8\textwidth]{shock_scheme2.png}
+    \includegraphics[width=0.8\textwidth]{shock_scheme3.png}
+    \includegraphics[width=0.8\textwidth]{shock_scheme4.png}
+    \caption{Results of the retraining experiments: 
+    (left) trajectory of the trained base agent in non-shocked scenario; \\
+    (center) trajectory of the trained base agent with planned shock (the shock occurred while the flight was on the crossed cell); \\
+    (right) trajectory of the retrained agent after the shock ;}
+    \label{fig:retrain_res}
+\end{figure}

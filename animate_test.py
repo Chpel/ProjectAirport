@@ -2,7 +2,7 @@ from modules import *
 from torch import load
 
 params = {
-    'VERSION': 'Dispatcher_test',
+    'VERSION': 'Disp_4of4_flat',
     }
 
 
@@ -25,9 +25,9 @@ plt.show()
 
 env = Airport(Main_surface)
 k_planes = 4
-env.add(k_planes, True)
+env.add(k_planes, False)
 target_Q=DispatcherRL_M(env.fleet[0].mobility, 1, k_planes)
-model = load(params['VERSION']+'.pt')
+model = load('models/' + params['VERSION']+'.pt')
 target_Q.load_state_dict(model['MODEL'])
 device='cpu'
 for key in model.keys():

@@ -9,3 +9,10 @@ Anaconda Prompt (RL).lnk
 work.py
 Dispatcher_test.pt
 *.lnk
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.gz
+*.toc
