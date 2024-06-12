@@ -5,3 +5,4 @@ RL-simulator of moving objects through restricted paths
 
 1) Mid-step intercection of trajectories
 2) Classification of the episodes (fail, success, semi-success, truncation)
+3) SSH connection check
