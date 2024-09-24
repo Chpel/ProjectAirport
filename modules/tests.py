@@ -19,11 +19,22 @@ def test(env, target_Q, device):
     return track, rews
     
     
-def show_trajectory(env, path, rs, ax=plt):
+def show_trajectory(env, path, rs, ax=plt, num=False):
     ax.imshow(env.surface)
+    bias = np.array([[0,0],[-0.4,0],[0,0.4],[-0.4, 0.4]])
+    x0 = -1
+    y0 = -1
     for g in range(len(env.fleet)):
         print(path[:, g])
         ax.plot(path[:,g, 1], path[:,g,0], '.-', label=f'gate {g+1}', alpha=0.5)
+        i = 0
+        if num:
+            for y, x in path[:,g]:
+                if x0 != x or y0 != y:
+                    ax.text(x + bias[g][0],y + bias[g][1], str(i))
+                    x0 = x
+                    y0 = y
+                i+=1
     print(rs)
     
     
